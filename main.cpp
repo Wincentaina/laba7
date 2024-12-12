@@ -5,37 +5,63 @@
 
 using namespace std;
 
+// Интерфейс для выполнения тестов
+class ITestRunner {
+public:
+    virtual ~ITestRunner() = default;
+    virtual bool executeTest(const string& input, const string& expected) const = 0;
+};
+
+// Простая реализация ITestRunner
+class SimpleTestRunner : public ITestRunner {
+public:
+    bool executeTest(const string& input, const string& expected) const override {
+        return input == expected;
+    }
+};
+
+// Расширенная реализация ITestRunner
+class AdvancedTestRunner : public ITestRunner {
+private:
+    int complexityLevel;
+
+public:
+    AdvancedTestRunner(int level) : complexityLevel(level) {}
+
+    bool executeTest(const string& input, const string& expected) const override {
+        cout << "Executing with complexity level: " << complexityLevel << endl;
+        return input == expected && complexityLevel > 2;
+    }
+};
+
 // Абстрактный базовый класс TestCaseBase
 class TestCaseBase {
 protected:
     string input;
     string expected;
+    unique_ptr<ITestRunner> testRunner;
 
 public:
-    TestCaseBase(const string& input_str, const string& expected_str)
-        : input(input_str), expected(expected_str) {}
+    TestCaseBase(const string& input_str, const string& expected_str, unique_ptr<ITestRunner> runner)
+        : input(input_str), expected(expected_str), testRunner(move(runner)) {}
 
     virtual ~TestCaseBase() = default;  // Виртуальный деструктор
 
-    virtual bool runTest() const = 0;  // Чисто виртуальная функция для выполнения теста
+    virtual bool runTest() const {
+        return testRunner->executeTest(input, expected);
+    }
 
-    // Абстрактный метод клонирования
     virtual TestCaseBase* clone() const = 0;
 };
 
 // Класс TestCase - производный от TestCaseBase
 class TestCase : public TestCaseBase {
 public:
-    TestCase(const string& input_str, const string& expected_str)
-        : TestCaseBase(input_str, expected_str) {}
+    TestCase(const string& input_str, const string& expected_str, unique_ptr<ITestRunner> runner)
+        : TestCaseBase(input_str, expected_str, move(runner)) {}
 
-    bool runTest() const override {
-        return input == expected;
-    }
-
-    // Глубокое клонирование
     TestCase* clone() const override {
-        return new TestCase(input, expected);
+        return new TestCase(input, expected, make_unique<SimpleTestRunner>());
     }
 };
 
@@ -46,14 +72,13 @@ private:
 
 public:
     AdvancedTestCase(const string& input_str, const string& expected_str, int level)
-        : TestCase(input_str, expected_str), complexityLevel(level) {}
+        : TestCase(input_str, expected_str, make_unique<AdvancedTestRunner>(level)), complexityLevel(level) {}
 
     bool runTest() const override {
         cout << "Running advanced test with complexity level: " << complexityLevel << endl;
-        return TestCase::runTest() && complexityLevel > 2;
+        return TestCase::runTest();
     }
 
-    // Глубокое клонирование для производного класса
     AdvancedTestCase* clone() const override {
         return new AdvancedTestCase(input, expected, complexityLevel);
     }
@@ -70,17 +95,14 @@ public:
         totalTestSuitesCreated++;
     }
 
-    // Метод для добавления тестов
     void addTest(TestCaseBase* test) {
         tests.push_back(test);
     }
 
-    // Получение тестов
     const vector<TestCaseBase*>& getTests() const {
         return tests;
     }
 
-    // Количество тестов
     int getTestCount() const {
         return tests.size();
     }
@@ -89,7 +111,6 @@ public:
         return totalTestSuitesCreated;
     }
 
-    // Перегрузка оператора присваивания для производного класса
     TestSuite& operator=(const TestSuite& other) {
         if (this != &other) {
             for (TestCaseBase* test : tests) {
@@ -97,16 +118,15 @@ public:
             }
             tests.clear();
             for (TestCaseBase* test : other.tests) {
-                tests.push_back(test->clone());  // Глубокое копирование
+                tests.push_back(test->clone());
             }
         }
         return *this;
     }
 
-    // Копирование объекта с глубоким клонированием
     TestSuite(const TestSuite& other) {
         for (TestCaseBase* test : other.tests) {
-            tests.push_back(test->clone());  // Глубокое копирование
+            tests.push_back(test->clone());
         }
     }
 
@@ -116,9 +136,8 @@ public:
         }
     }
 
-    // Функция для поверхностного копирования
     void shallowCopy(const TestSuite& other) {
-        tests = other.tests;  // Поверхностное копирование, т.е. просто копируем указатели
+        tests = other.tests;
     }
 };
 
@@ -239,8 +258,8 @@ Submission checkSolution(UserSolution& solution, Task& task) {
 
 // Главная функция
 int main() {
-    TestCase* test1 = new TestCase("input1", "input1");
-    TestCase* test2 = new TestCase("input2", "expected2");
+    auto test1 = new TestCase("input1", "input1", make_unique<SimpleTestRunner>());
+    auto test2 = new AdvancedTestCase("input2", "expected2", 3);
 
     TestSuite suite;
     suite.addTest(test1);
